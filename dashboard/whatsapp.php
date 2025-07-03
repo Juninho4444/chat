@@ -20,8 +20,22 @@ if ($_POST) {
     try {
         if (isset($_POST['action'])) {
             switch ($_POST['action']) {
+                case 'test_connection':
+                    $result = $whatsapp->testConnection();
+                    if ($result['status_code'] == 200) {
+                        $message = "Conexão com a API Evolution funcionando corretamente!";
+                    } else {
+                        $error = "Erro na conexão com a API. Código: " . $result['status_code'];
+                        if (isset($result['data']['message'])) {
+                            $error .= " - " . $result['data']['message'];
+                        }
+                    }
+                    break;
+                    
                 case 'create_instance':
                     $result = $whatsapp->createInstance($instance_name);
+                    error_log("Create instance result: " . json_encode($result));
+                    
                     if ($result['status_code'] == 201 || $result['status_code'] == 200) {
                         $message = "Instância criada com sucesso! Agora você pode gerar o QR Code.";
                         
@@ -37,6 +51,11 @@ if ($_POST) {
                         if (isset($result['data']['message'])) {
                             $error .= " - " . $result['data']['message'];
                         }
+                        if (isset($result['data']['error'])) {
+                            $error .= " - " . $result['data']['error'];
+                        }
+                        // Log completo da resposta para depuração
+                        error_log("Full API response: " . json_encode($result));
                     }
                     break;
                     
@@ -47,6 +66,9 @@ if ($_POST) {
                         $message = "QR Code gerado! Escaneie com seu WhatsApp.";
                     } else {
                         $error = "Erro ao obter QR Code. Tente criar uma nova instância.";
+                        if (isset($result['data']['message'])) {
+                            $error .= " - " . $result['data']['message'];
+                        }
                     }
                     break;
                     
@@ -57,6 +79,9 @@ if ($_POST) {
                             $message = "Mensagem de teste enviada com sucesso!";
                         } else {
                             $error = "Erro ao enviar mensagem de teste.";
+                            if (isset($result['data']['message'])) {
+                                $error .= " - " . $result['data']['message'];
+                            }
                         }
                     } else {
                         $error = "Preencha o número e a mensagem de teste.";
@@ -66,6 +91,7 @@ if ($_POST) {
         }
     } catch (Exception $e) {
         $error = "Erro: " . $e->getMessage();
+        error_log("WhatsApp action error: " . $e->getMessage());
     }
 }
 
@@ -78,7 +104,7 @@ if ($_SESSION['whatsapp_instance']) {
             $status = $status_result['data'];
         }
     } catch (Exception $e) {
-        // Ignorar erro de status
+        error_log("Status check error: " . $e->getMessage());
     }
 }
 ?>
@@ -168,6 +194,25 @@ if ($_SESSION['whatsapp_instance']) {
                             </div>
                         <?php endif; ?>
 
+                        <!-- Teste de Conectividade -->
+                        <div class="mt-8 bg-white shadow rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h3 class="text-lg leading-6 font-medium text-gray-900">Teste de Conectividade</h3>
+                                <div class="mt-2 max-w-xl text-sm text-gray-500">
+                                    <p>Primeiro, teste se a conexão com a API Evolution está funcionando</p>
+                                </div>
+                                <div class="mt-5">
+                                    <form method="POST" class="inline">
+                                        <input type="hidden" name="action" value="test_connection">
+                                        <button type="submit" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition duration-150">
+                                            <i class="fas fa-wifi mr-2"></i>
+                                            Testar Conexão API
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Status da Conexão -->
                         <div class="mt-8 bg-white shadow rounded-lg">
                             <div class="px-4 py-5 sm:p-6">
@@ -230,6 +275,7 @@ if ($_SESSION['whatsapp_instance']) {
                                         </h4>
                                         <p class="text-sm text-gray-600 mb-4">
                                             Primeiro, você precisa criar uma instância do WhatsApp para sua conta.
+                                            <br><strong>Nome da instância:</strong> <?php echo htmlspecialchars($instance_name); ?>
                                         </p>
                                         <form method="POST" class="inline">
                                             <input type="hidden" name="action" value="create_instance">
@@ -335,6 +381,19 @@ if ($_SESSION['whatsapp_instance']) {
                             </div>
                         </div>
                         <?php endif; ?>
+
+                        <!-- Debug Info -->
+                        <div class="mt-8 bg-gray-100 shadow rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h3 class="text-lg leading-6 font-medium text-gray-900">Informações de Debug</h3>
+                                <div class="mt-2 text-sm text-gray-600">
+                                    <p><strong>API URL:</strong> <?php echo EVOLUTION_API_URL; ?></p>
+                                    <p><strong>API Key:</strong> <?php echo substr(EVOLUTION_API_KEY, 0, 10) . '...'; ?></p>
+                                    <p><strong>Instance Name:</strong> <?php echo htmlspecialchars($instance_name); ?></p>
+                                    <p><strong>Site URL:</strong> <?php echo defined('SITE_URL') ? SITE_URL : 'Não definido'; ?></p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </main>
