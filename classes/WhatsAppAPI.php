@@ -135,11 +135,37 @@ class WhatsAppAPI {
     }
     
     public function getQRCode($instanceName) {
-        return $this->makeRequest("/instance/connect/{$instanceName}");
+        error_log("=== GET QR CODE DEBUG ===");
+        error_log("Requesting QR Code for instance: " . $instanceName);
+        
+        $result = $this->makeRequest("/instance/connect/{$instanceName}");
+        
+        error_log("QR Code API response status: " . $result['status_code']);
+        error_log("QR Code API response data: " . json_encode($result['data']));
+        
+        // Verificar se temos o QR code na resposta
+        if (isset($result['data']['base64'])) {
+            error_log("QR Code base64 found, length: " . strlen($result['data']['base64']));
+            error_log("QR Code base64 preview: " . substr($result['data']['base64'], 0, 50) . "...");
+        } else {
+            error_log("QR Code base64 NOT found in response");
+            if (isset($result['data'])) {
+                error_log("Available keys in response: " . implode(', ', array_keys($result['data'])));
+            }
+        }
+        
+        return $result;
     }
     
     public function getInstanceStatus($instanceName) {
-        return $this->makeRequest("/instance/connectionState/{$instanceName}");
+        error_log("=== GET INSTANCE STATUS DEBUG ===");
+        error_log("Checking status for instance: " . $instanceName);
+        
+        $result = $this->makeRequest("/instance/connectionState/{$instanceName}");
+        
+        error_log("Status API response: " . json_encode($result));
+        
+        return $result;
     }
     
     public function sendMessage($instanceName, $phone, $message) {
@@ -200,6 +226,18 @@ class WhatsAppAPI {
             }
         }
         return false;
+    }
+    
+    // Método para obter informações detalhadas da instância
+    public function getInstanceInfo($instanceName) {
+        error_log("=== GET INSTANCE INFO DEBUG ===");
+        error_log("Getting info for instance: " . $instanceName);
+        
+        $result = $this->makeRequest("/instance/fetchInstances/{$instanceName}");
+        
+        error_log("Instance info response: " . json_encode($result));
+        
+        return $result;
     }
 }
 ?>

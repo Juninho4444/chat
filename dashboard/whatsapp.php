@@ -42,6 +42,15 @@ if ($_POST) {
                     }
                     break;
                     
+                case 'get_instance_info':
+                    $result = $whatsapp->getInstanceInfo($instance_name);
+                    if ($result['status_code'] == 200) {
+                        $message = "Informações da instância obtidas! Verifique os logs para detalhes.";
+                    } else {
+                        $error = "Erro ao obter informações da instância. Código: " . $result['status_code'];
+                    }
+                    break;
+                    
                 case 'create_instance':
                     // Primeiro verificar se a instância já existe
                     if ($whatsapp->instanceExists($instance_name)) {
@@ -86,14 +95,32 @@ if ($_POST) {
                     break;
                     
                 case 'get_qr':
+                    error_log("=== QR CODE REQUEST DEBUG ===");
+                    error_log("Requesting QR code for instance: " . $instance_name);
+                    
                     $result = $whatsapp->getQRCode($instance_name);
+                    
+                    error_log("QR Code result status: " . $result['status_code']);
+                    error_log("QR Code result data: " . json_encode($result['data']));
+                    
                     if ($result['status_code'] == 200 && isset($result['data']['base64'])) {
                         $qr_code = $result['data']['base64'];
                         $message = "QR Code gerado! Escaneie com seu WhatsApp.";
+                        error_log("QR Code successfully extracted, length: " . strlen($qr_code));
                     } else {
                         $error = "Erro ao obter QR Code. Tente criar uma nova instância.";
                         if (isset($result['data']['message'])) {
                             $error .= " - " . $result['data']['message'];
+                        }
+                        
+                        // Log detalhado do erro
+                        error_log("QR Code error details:");
+                        error_log("- Status code: " . $result['status_code']);
+                        error_log("- Response data: " . json_encode($result['data']));
+                        
+                        // Verificar se há outras chaves na resposta
+                        if (isset($result['data']) && is_array($result['data'])) {
+                            error_log("- Available keys in response: " . implode(', ', array_keys($result['data'])));
                         }
                     }
                     break;
@@ -132,6 +159,13 @@ if ($_SESSION['whatsapp_instance']) {
     } catch (Exception $e) {
         error_log("Status check error: " . $e->getMessage());
     }
+}
+
+// Log do QR Code antes da renderização
+if ($qr_code) {
+    error_log("=== QR CODE RENDER DEBUG ===");
+    error_log("QR Code variable is set, length: " . strlen($qr_code));
+    error_log("QR Code starts with: " . substr($qr_code, 0, 20));
 }
 ?>
 <!DOCTYPE html>
@@ -243,6 +277,16 @@ if ($_SESSION['whatsapp_instance']) {
                                             Listar Instâncias
                                         </button>
                                     </form>
+                                    
+                                    <?php if ($_SESSION['whatsapp_instance']): ?>
+                                    <form method="POST" class="inline">
+                                        <input type="hidden" name="action" value="get_instance_info">
+                                        <button type="submit" class="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition duration-150">
+                                            <i class="fas fa-info-circle mr-2"></i>
+                                            Info da Instância
+                                        </button>
+                                    </form>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                         </div>
@@ -266,11 +310,16 @@ if ($_SESSION['whatsapp_instance']) {
                                             </div>
                                             <div class="ml-3">
                                                 <p class="text-sm font-medium text-gray-900">
-                                                    Status: <?php echo isset($status['state']) ? ucfirst($status['state']) : 'Desconhecido'; ?>
+                                                    Status: <?php echo isset($status['state']) ? htmlspecialchars($status['state']) : 'Desconhecido'; ?>
                                                 </p>
                                                 <p class="text-sm text-gray-500">
                                                     Instância: <?php echo htmlspecialchars($_SESSION['whatsapp_instance'] ?? 'Não criada'); ?>
                                                 </p>
+                                                <?php if (isset($status['instance'])): ?>
+                                                    <p class="text-xs text-gray-400 mt-1">
+                                                        Detalhes: <?php echo htmlspecialchars(json_encode($status['instance'])); ?>
+                                                    </p>
+                                                <?php endif; ?>
                                             </div>
                                         </div>
                                     <?php else: ?>
@@ -343,15 +392,28 @@ if ($_SESSION['whatsapp_instance']) {
                                             <div class="bg-gray-50 p-4 rounded-lg text-center">
                                                 <img src="data:image/png;base64,<?php echo $qr_code; ?>" 
                                                      alt="QR Code WhatsApp" 
-                                                     class="mx-auto max-w-xs border rounded-lg shadow-sm">
+                                                     class="mx-auto max-w-xs border rounded-lg shadow-sm"
+                                                     onerror="console.error('Erro ao carregar QR Code:', this.src); this.style.display='none'; document.getElementById('qr-error').style.display='block';">
+                                                <div id="qr-error" style="display:none;" class="text-red-600 mt-2">
+                                                    <i class="fas fa-exclamation-triangle mr-2"></i>
+                                                    Erro ao carregar QR Code. Verifique os logs do servidor.
+                                                </div>
                                                 <p class="mt-2 text-sm text-gray-600">
                                                     Escaneie este QR Code com seu WhatsApp
                                                 </p>
                                                 <p class="mt-1 text-xs text-gray-500">
                                                     O QR Code expira em alguns minutos. Se não funcionar, gere um novo.
                                                 </p>
+                                                <p class="mt-1 text-xs text-gray-400">
+                                                    Debug: QR Code length = <?php echo strlen($qr_code); ?> chars
+                                                </p>
                                             </div>
                                         </div>
+                                        <?php else: ?>
+                                            <div class="mt-4 text-sm text-gray-500">
+                                                <i class="fas fa-info-circle mr-2"></i>
+                                                Nenhum QR Code gerado ainda. Clique no botão acima para gerar.
+                                            </div>
                                         <?php endif; ?>
                                     </div>
                                     <?php endif; ?>
@@ -427,6 +489,8 @@ if ($_SESSION['whatsapp_instance']) {
                                     <p><strong>Site URL:</strong> <?php echo defined('SITE_URL') ? SITE_URL : 'Não definido'; ?></p>
                                     <p><strong>PHP Version:</strong> <?php echo phpversion(); ?></p>
                                     <p><strong>cURL Version:</strong> <?php echo curl_version()['version']; ?></p>
+                                    <p><strong>QR Code Status:</strong> <?php echo $qr_code ? 'Carregado (' . strlen($qr_code) . ' chars)' : 'Não carregado'; ?></p>
+                                    <p><strong>Instance Status:</strong> <?php echo $status ? json_encode($status) : 'Não disponível'; ?></p>
                                 </div>
                             </div>
                         </div>
@@ -444,6 +508,15 @@ if ($_SESSION['whatsapp_instance']) {
                 location.reload();
             }
         }, 30000);
+
+        // Log do QR Code no console do navegador
+        <?php if ($qr_code): ?>
+        console.log('QR Code loaded successfully');
+        console.log('QR Code length:', <?php echo strlen($qr_code); ?>);
+        console.log('QR Code preview:', '<?php echo substr($qr_code, 0, 50); ?>...');
+        <?php else: ?>
+        console.log('QR Code not loaded');
+        <?php endif; ?>
     </script>
 </body>
 </html>
