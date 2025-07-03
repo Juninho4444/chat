@@ -1,9 +1,9 @@
 <?php
 class Database {
     private $host = 'localhost';
-    private $db_name = 'saas_client_management';
-    private $username = 'root';
-    private $password = '';
+    private $db_name = 'tesg';
+    private $username = 'tesg';
+    private $password = '?j#I4f6OnycwBv7x';
     public $conn;
 
     public function getConnection() {
