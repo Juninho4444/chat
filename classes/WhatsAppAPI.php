@@ -71,9 +71,10 @@ class WhatsAppAPI {
     }
     
     public function createInstance($instanceName) {
-        // Dados simplificados para criação da instância
+        // Dados completos para criação da instância incluindo o token
         $data = [
             'instanceName' => $instanceName,
+            'token' => $this->api_key,
             'qrcode' => true
         ];
         
