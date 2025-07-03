@@ -1,8 +1,8 @@
 <?php
-require_once '../config/config.php';
-require_once '../config/database.php';
-require_once '../classes/WhatsAppAPI.php';
-require_once '../classes/User.php';
+require_once __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../classes/WhatsAppAPI.php';
+require_once __DIR__ . '/../classes/User.php';
 
 // Verificar se está logado
 if (!isset($_SESSION['user_id'])) {

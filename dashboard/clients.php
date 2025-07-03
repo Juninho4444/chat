@@ -1,7 +1,7 @@
 <?php
-require_once '../config/config.php';
-require_once '../config/database.php';
-require_once '../classes/Client.php';
+require_once __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../classes/Client.php';
 
 // Verificar se está logado
 if (!isset($_SESSION['user_id'])) {
