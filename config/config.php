@@ -1,4 +1,8 @@
 <?php
+// Habilitar exibição de erros para depuração
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
+
 // Configurações da API Evolution V2
 define('EVOLUTION_API_URL', 'https://evov2.duckdns.org');
 define('EVOLUTION_API_KEY', '79Bb4lpu2TzxrSMu3SDfSGvB3MIhkur7');
