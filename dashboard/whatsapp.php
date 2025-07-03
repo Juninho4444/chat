@@ -136,17 +136,72 @@ if ($_POST) {
                     
                 case 'test_message':
                     if (!empty($_POST['test_phone']) && !empty($_POST['test_message'])) {
+                        // Primeiro verificar se a instância está conectada
+                        if (!$whatsapp->isInstanceConnected($instance_name)) {
+                            $error = "WhatsApp não está conectado. Escaneie o QR Code primeiro.";
+                            break;
+                        }
+                        
+                        // Verificar se o número é válido
+                        $contactInfo = $whatsapp->getContactInfo($instance_name, $_POST['test_phone']);
+                        error_log("Contact info result: " . json_encode($contactInfo));
+                        
                         $result = $whatsapp->sendMessage($instance_name, $_POST['test_phone'], $_POST['test_message']);
-                        if ($result['status_code'] == 200) {
+                        
+                        if ($result['status_code'] == 200 || $result['status_code'] == 201) {
                             $message = "Mensagem de teste enviada com sucesso!";
+                            
+                            // Log adicional de sucesso
+                            error_log("Message sent successfully to: " . $_POST['test_phone']);
+                            if (isset($result['data']['key']['id'])) {
+                                error_log("Message ID: " . $result['data']['key']['id']);
+                            }
                         } else {
-                            $error = "Erro ao enviar mensagem de teste.";
+                            $error = "Erro ao enviar mensagem de teste. Código: " . $result['status_code'];
+                            
+                            // Adicionar detalhes específicos do erro
                             if (isset($result['data']['message'])) {
                                 $error .= " - " . $result['data']['message'];
                             }
+                            if (isset($result['data']['error'])) {
+                                $error .= " - " . $result['data']['error'];
+                            }
+                            
+                            // Sugestões baseadas no código de erro
+                            switch ($result['status_code']) {
+                                case 400:
+                                    $error .= " (Verifique o formato do número de telefone)";
+                                    break;
+                                case 401:
+                                    $error .= " (Problema de autenticação com a API)";
+                                    break;
+                                case 404:
+                                    $error .= " (Instância não encontrada ou endpoint incorreto)";
+                                    break;
+                                case 500:
+                                    $error .= " (Erro interno da API)";
+                                    break;
+                            }
+                            
+                            error_log("Message send failed. Full response: " . json_encode($result));
                         }
                     } else {
                         $error = "Preencha o número e a mensagem de teste.";
+                    }
+                    break;
+                    
+                case 'validate_phone':
+                    if (!empty($_POST['phone_to_validate'])) {
+                        $result = $whatsapp->getContactInfo($instance_name, $_POST['phone_to_validate']);
+                        
+                        if ($result['status_code'] == 200) {
+                            $message = "Número validado! Verifique os logs para detalhes.";
+                            error_log("Phone validation result: " . json_encode($result['data']));
+                        } else {
+                            $error = "Erro ao validar número. Código: " . $result['status_code'];
+                        }
+                    } else {
+                        $error = "Informe um número para validar.";
                     }
                     break;
             }
@@ -339,6 +394,11 @@ if ($qr_code) {
                                                         <i class="fas fa-info-circle mr-1"></i>
                                                         Aguardando escaneamento do QR Code...
                                                     </p>
+                                                <?php elseif ($connection_state == 'open'): ?>
+                                                    <p class="text-xs text-green-600 mt-1">
+                                                        <i class="fas fa-check mr-1"></i>
+                                                        WhatsApp conectado e pronto para enviar mensagens!
+                                                    </p>
                                                 <?php endif; ?>
                                             </div>
                                         </div>
@@ -474,7 +534,7 @@ if ($qr_code) {
                             </div>
                         </div>
 
-                        <!-- Teste de Mensagem -->
+                        <!-- Validação de Número -->
                         <?php 
                         $connection_state = 'unknown';
                         if (isset($status['instance']['state'])) {
@@ -487,12 +547,59 @@ if ($qr_code) {
                         <div class="mt-8 bg-white shadow rounded-lg">
                             <div class="px-4 py-5 sm:p-6">
                                 <h3 class="text-lg leading-6 font-medium text-gray-900">
+                                    <i class="fas fa-phone text-blue-500 mr-2"></i>
+                                    Validar Número
+                                </h3>
+                                <div class="mt-2 max-w-xl text-sm text-gray-500">
+                                    <p>Verifique se um número de telefone está registrado no WhatsApp</p>
+                                </div>
+                                <form method="POST" class="mt-5">
+                                    <input type="hidden" name="action" value="validate_phone">
+                                    <div class="flex gap-4">
+                                        <div class="flex-1">
+                                            <label for="phone_to_validate" class="block text-sm font-medium text-gray-700">
+                                                Número para validar (com código do país)
+                                            </label>
+                                            <input type="tel" name="phone_to_validate" id="phone_to_validate" 
+                                                   placeholder="5511999999999"
+                                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                        </div>
+                                        <div class="flex items-end">
+                                            <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition duration-150">
+                                                <i class="fas fa-search mr-2"></i>
+                                                Validar
+                                            </button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+
+                        <!-- Teste de Mensagem -->
+                        <div class="mt-8 bg-white shadow rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h3 class="text-lg leading-6 font-medium text-gray-900">
                                     <i class="fas fa-paper-plane text-green-500 mr-2"></i>
                                     Teste de Mensagem
                                 </h3>
                                 <div class="mt-2 max-w-xl text-sm text-gray-500">
                                     <p>Envie uma mensagem de teste para verificar se tudo está funcionando</p>
                                 </div>
+                                
+                                <!-- Dicas importantes -->
+                                <div class="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                                    <h4 class="text-sm font-medium text-yellow-800 mb-2">
+                                        <i class="fas fa-lightbulb mr-2"></i>
+                                        Dicas importantes:
+                                    </h4>
+                                    <ul class="text-sm text-yellow-700 space-y-1">
+                                        <li>• Use o formato completo: <strong>5511999999999</strong> (código do país + DDD + número)</li>
+                                        <li>• O número deve estar registrado no WhatsApp</li>
+                                        <li>• Teste primeiro com seu próprio número</li>
+                                        <li>• Verifique se o WhatsApp está conectado (status "Open" acima)</li>
+                                    </ul>
+                                </div>
+                                
                                 <form method="POST" class="mt-5">
                                     <input type="hidden" name="action" value="test_message">
                                     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -503,6 +610,7 @@ if ($qr_code) {
                                             <input type="tel" name="test_phone" id="test_phone" 
                                                    placeholder="5511999999999"
                                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                            <p class="mt-1 text-xs text-gray-500">Exemplo: 5511999999999 (Brasil + SP + número)</p>
                                         </div>
                                         <div>
                                             <label for="test_message" class="block text-sm font-medium text-gray-700">
@@ -611,6 +719,33 @@ if ($qr_code) {
                     }
                 }, 2000);
             }
+        });
+
+        // Formatação automática do número de telefone
+        document.getElementById('test_phone')?.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            
+            // Se não começar com 55, adicionar
+            if (value.length > 0 && !value.startsWith('55')) {
+                if (value.length <= 11) {
+                    value = '55' + value;
+                }
+            }
+            
+            e.target.value = value;
+        });
+
+        document.getElementById('phone_to_validate')?.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            
+            // Se não começar com 55, adicionar
+            if (value.length > 0 && !value.startsWith('55')) {
+                if (value.length <= 11) {
+                    value = '55' + value;
+                }
+            }
+            
+            e.target.value = value;
         });
     </script>
 </body>

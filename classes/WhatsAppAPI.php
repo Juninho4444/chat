@@ -169,22 +169,78 @@ class WhatsAppAPI {
     }
     
     public function sendMessage($instanceName, $phone, $message) {
-        // Limpar o número de telefone
-        $phone = preg_replace('/[^0-9]/', '', $phone);
+        error_log("=== SEND MESSAGE DEBUG ===");
+        error_log("Instance: " . $instanceName);
+        error_log("Original phone: " . $phone);
+        error_log("Message: " . $message);
         
-        // Garantir que o número tenha o código do país
-        if (!str_starts_with($phone, '55')) {
-            $phone = '55' . $phone;
+        // Limpar o número de telefone - remover todos os caracteres não numéricos
+        $cleanPhone = preg_replace('/[^0-9]/', '', $phone);
+        error_log("Cleaned phone: " . $cleanPhone);
+        
+        // Verificar se o número já tem código do país
+        if (strlen($cleanPhone) === 11 && (str_starts_with($cleanPhone, '11') || str_starts_with($cleanPhone, '21') || str_starts_with($cleanPhone, '31'))) {
+            // Número brasileiro sem código do país - adicionar 55
+            $finalPhone = '55' . $cleanPhone;
+        } elseif (strlen($cleanPhone) === 13 && str_starts_with($cleanPhone, '55')) {
+            // Já tem código do país
+            $finalPhone = $cleanPhone;
+        } elseif (strlen($cleanPhone) === 10 || strlen($cleanPhone) === 11) {
+            // Número brasileiro - adicionar código do país
+            $finalPhone = '55' . $cleanPhone;
+        } else {
+            // Usar como está
+            $finalPhone = $cleanPhone;
         }
         
-        $data = [
-            'number' => $phone,
-            'textMessage' => [
+        error_log("Final phone number: " . $finalPhone);
+        
+        // Tentar diferentes formatos de payload
+        $payloads = [
+            // Formato 1: Padrão Evolution API v2
+            [
+                'number' => $finalPhone,
+                'textMessage' => [
+                    'text' => $message
+                ]
+            ],
+            // Formato 2: Alternativo com options
+            [
+                'number' => $finalPhone,
                 'text' => $message
+            ],
+            // Formato 3: Com @c.us
+            [
+                'number' => $finalPhone . '@c.us',
+                'textMessage' => [
+                    'text' => $message
+                ]
             ]
         ];
         
-        return $this->makeRequest("/message/sendText/{$instanceName}", 'POST', $data);
+        foreach ($payloads as $index => $data) {
+            error_log("Trying payload format " . ($index + 1) . ": " . json_encode($data));
+            
+            $result = $this->makeRequest("/message/sendText/{$instanceName}", 'POST', $data);
+            
+            error_log("Result for payload " . ($index + 1) . ": " . json_encode($result));
+            
+            // Se obteve sucesso (200 ou 201), retornar
+            if ($result['status_code'] === 200 || $result['status_code'] === 201) {
+                error_log("Message sent successfully with payload format " . ($index + 1));
+                return $result;
+            }
+            
+            // Se o erro não for relacionado ao formato, parar de tentar
+            if ($result['status_code'] === 404 || $result['status_code'] === 401) {
+                error_log("API error (404/401), stopping attempts");
+                break;
+            }
+        }
+        
+        // Se chegou aqui, nenhum formato funcionou
+        error_log("All payload formats failed");
+        return $result; // Retorna o último resultado
     }
     
     public function sendBulkMessage($instanceName, $contacts, $message) {
@@ -238,6 +294,37 @@ class WhatsAppAPI {
         error_log("Instance info response: " . json_encode($result));
         
         return $result;
+    }
+    
+    // Método para verificar se a instância está conectada
+    public function isInstanceConnected($instanceName) {
+        $status = $this->getInstanceStatus($instanceName);
+        
+        if ($status['status_code'] === 200) {
+            $state = null;
+            if (isset($status['data']['instance']['state'])) {
+                $state = $status['data']['instance']['state'];
+            } elseif (isset($status['data']['state'])) {
+                $state = $status['data']['state'];
+            }
+            
+            return $state === 'open';
+        }
+        
+        return false;
+    }
+    
+    // Método para obter informações do contato
+    public function getContactInfo($instanceName, $phone) {
+        $cleanPhone = preg_replace('/[^0-9]/', '', $phone);
+        
+        if (!str_starts_with($cleanPhone, '55')) {
+            $cleanPhone = '55' . $cleanPhone;
+        }
+        
+        return $this->makeRequest("/chat/whatsappNumbers/{$instanceName}", 'POST', [
+            'numbers' => [$cleanPhone]
+        ]);
     }
 }
 ?>
